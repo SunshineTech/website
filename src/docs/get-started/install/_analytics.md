@@ -1,10 +1,5 @@
 <aside class="alert alert-warning" role="alert" markdown="1">
-  The `flutter` tool uses Google Analytics to anonymously report feature usage statistics
-  and basic crash reports. This data is used to help improve Flutter tools over time.
-  Analytics is not sent on the very first run or for any runs involving `flutter config`,
-  so you can opt out of analytics before any data is sent. To disable reporting,
-  type `flutter config --no-analytics` and to display the current setting, type
-  `flutter config`. See Google's [Privacy Policy].
+  `flutter`工具使用Google Analytics匿名报告功能使用情况统计信息和基本崩溃报告。此数据用于帮助改善Flutter工具。在第一次运行或任何涉及`flutter config`的运行时都不会发送分析，因此您可以在发送任何数据之前选择退出分析。要禁用报告，请键入`flutter config --no-analytics`；要显示当前设置，键入`flutter config`。请参阅Google的[隐私政策]。
 
-  [Privacy Policy]: https://policies.google.com/privacy
+  [隐私政策]: https://policies.google.com/privacy
 </aside>

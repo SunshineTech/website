@@ -1,16 +1,16 @@
 ---
-title: Install
+title: 安装
 next:
-  title: Set up an editor
+  title: 设置编辑器
   path: /docs/get-started/editor
 ---
 
-Select the operating system on which you are installing Flutter:
+选择要安装Flutter的操作系统：
 
 {{site.alert.note}}
-  **Are you on Chrome OS?**
+  **在Chrome OS上吗？**
 
-  If so, see the official [Chrome OS Flutter installation docs!](/docs/get-started/install/chromeos)
+  如果是这样，请参阅官方[Chrome OS Flutter安装文档](/docs/get-started/install/chromeos)！
 {{site.alert.end}}
 
 <div class="card-deck mb-8">
@@ -27,6 +27,6 @@ Select the operating system on which you are installing Flutter:
 </div>
 
 {{site.alert.important}}
-  If you're in China, first read [Using Flutter in China](/community/china).
+  如果你在中国，请首先阅读[在中国使用Flutter](/community/china).
 {{site.alert.end}}
 

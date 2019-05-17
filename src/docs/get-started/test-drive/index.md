@@ -1,18 +1,17 @@
 ---
-title: Test drive
+title: 试驾
 prev:
-  title: Set up an editor
+  title: 设置编辑器
   path: /docs/get-started/editor
 next:
-  title: Write your first Flutter app
+  title: 编写您的第一个Flutter应用程序
   path: /docs/get-started/codelab
 toc: false
 ---
 
-This page describes how to create a new Flutter app from templates, run it, and experience "hot reload" after you make changes to the app.
+此页面介绍了如何从模板创建新的Flutter应用程序，运行它，以及在对应用程序进行更改后体验“热重载”。
 
-Select your development tool of choice for writing, building, and running
-Flutter apps.
+选择用于编写，构建和运行Flutter应用程序的开发工具。
 
 {% comment %} Nav tabs {% endcomment -%}
 <ul class="nav nav-tabs" id="editor-setup" role="tablist">
@@ -23,7 +22,7 @@ Flutter apps.
     <a class="nav-link" id="vscode-tab" href="#vscode" role="tab" aria-controls="vscode" aria-selected="false">Visual Studio Code</a>
   </li>
   <li class="nav-item">
-    <a class="nav-link" id="terminal-tab" href="#terminal" role="tab" aria-controls="terminal" aria-selected="false">Terminal & editor</a>
+    <a class="nav-link" id="terminal-tab" href="#terminal" role="tab" aria-controls="terminal" aria-selected="false">终端和编辑器</a>
   </li>
 </ul>
 
@@ -34,6 +33,6 @@ Flutter apps.
   {% include_relative _terminal.md %}
 </div>
 
-## Next step
+## 下一步
 
-You'll next learn some core Flutter concepts by creating a small app.
+接下来，您将通过创建一个小应用程序来学习一些核心的Flutter概念。

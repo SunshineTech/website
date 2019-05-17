@@ -16,7 +16,7 @@ dart:
   sdk:
     channel: stable
 sdk: # Flutter SDK
-  channel: stable # When changing this value also update it in src/_assets/js/archive.js
+  channel: 稳定 # When changing this value also update it in src/_assets/js/archive.js
 
 social:
   twitter: https://twitter.com/flutterdev
@@ -99,21 +99,21 @@ os-list: [Windows, macOS, Linux]
 alert:
   important: >-
     <aside class="alert alert-warning" role="alert" markdown="1">
-    <i class="fas fa-exclamation-circle"></i> **Important:**
+    <i class="fas fa-exclamation-circle"></i> **重要：**
   info: >-
     <aside class="alert alert-info" role="alert" markdown="1">
     <i class="fas fa-info-circle"></i>
   note: >-
     <aside class="alert alert-info" role="alert" markdown="1">
-    <i class="fas fa-info-circle"></i> **Note:**
+    <i class="fas fa-info-circle"></i> **注意：**
   secondary: >-
     <aside class="alert alert-secondary" role="alert" markdown="1">
   tip: >-
     <aside class="alert alert-success" role="alert" markdown="1">
-    <i class="far fa-lightbulb"></i> **Tip:**
+    <i class="far fa-lightbulb"></i> **提示：**
   warning: >-
     <aside class="alert alert-warning" role="alert" markdown="1">
-    <i class="fas fa-exclamation-triangle"></i> **Warning:**
+    <i class="fas fa-exclamation-triangle"></i> **警告：**
   end: </aside>
 
   # callout_danger: '<div class="bs-callout bs-callout-danger">'

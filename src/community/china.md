@@ -1,45 +1,32 @@
 ---
-title: Using Flutter in China
-description: Where to find a version of the Flutter site that is localized to Simplified Chinese.
+title: 在中国使用Flutter
+description: 在哪里可以找到本地化为简体中文的Flutter站点的版本。
 toc: true
 ---
 
 {% assign path = 'flutter_infra/releases/stable/windows/flutter_windows_v1.0.0-stable.zip' -%}
 
-The Flutter community has made a Simplified Chinese version of the
-Flutter site website available at
-[https://flutter-io.cn](https://flutter-io.cn).
+Flutter社区已经在网站[https://flutter-io.cn](https://flutter-io.cn)提供了Flutter站点的简体中文版本。
 
-If you’d like to install Flutter using an [installation
-bundle](/docs/development/tools/sdk/archive),
-you can replace the domain of the original URL with a trusted mirror
-to speed it up. For example:
+如果您要使用[安装包](/docs/development/tools/sdk/archive)安装Flutter，则可以使用受信任的镜像替换cURL的域名以加快速度。例如：
 
-* Original URL:<br>
+* 安装包URL：<br>
   [`https://storage.googleapis.com/{{path}}`](https://storage.googleapis.com/{{path}})
 
-* Mirrored URL:<br>
+* 镜像URL：<br>
   [`https://storage.flutter-io.cn/{{path}}`](https://storage.flutter-io.cn/{{path}})
 
-You must also set two environment variables to upgrade Flutter and use the pub
-package repository in China. Instructions are below.
+您还必须设置两个环境变量来在中国升级Flutter并使用pub包存储库。说明如下。
 
 {{site.alert.important}}
-  Use mirror sites only if you _trust_ the provider.
-  The Flutter team cannot verify their reliability or security.
+  仅当你_信任_提供者时才使用镜像站点。Flutter团队无法验证其可靠性或安全性。
 {{site.alert.end}}
 
-## Configuring Flutter to use a mirror site
+## 配置Flutter使用镜像站点
 
-If you’re installing or using Flutter in China, it may be helpful to use
-a trustworthy local mirror site that hosts Flutter’s dependencies.
-To instruct the Flutter tool to use an alternate storage location,
-you need to set two environment variables, `PUB_HOSTED_URL` and
-`FLUTTER_STORAGE_BASE_URL`, before running the `flutter` command.
+如果您在中国安装或使用Flutter，使用托管Flutter依赖项的可靠本地镜像站点可能会有所帮助。要指示Flutter工具使用备用存储位置，您需要在运行`flutter`命令之前设置两个环境变量`PUB_HOSTED_URL`和`FLUTTER_STORAGE_BASE_URL`。
 
-Taking MacOS or Linux as an example, here are the first few steps in
-the setup process for using a mirror site. Run the following in a Bash
-shell from the directory where you wish to store your local Flutter clone:
+以MacOS或Linux为例，以下是使用镜像站点的设置过程中的前几个步骤。在Bash shell中，从您希望存储本地Flutter克隆的目录中运行以下命令：
 
 
 ```terminal
@@ -51,22 +38,13 @@ $ cd ./flutter
 $ flutter doctor
 ```
 
-After these steps, you should be able to continue
-[setting up Flutter](/docs/get-started/editor) normally.
-From here on, packages fetched by `flutter packages get` are
-downloaded from `flutter-io.cn` in any shell where `PUB_HOSTED_URL`
-and `FLUTTER_STORAGE_BASE_URL` are set.
+完成这些步骤后，您应该能够继续正常[设置Flutter](/docs/get-started/editor)。
+从这里开始，`flutter packages get`获取的软件包将在任何设置了`PUB_HOSTED_URL`和`FLUTTER_STORAGE_BASE_URL`的shell中从`flutter-io.cn`下载。
 
-The `flutter-io.cn` server is a provisional mirror for Flutter
-dependencies and packages maintained by [GDG China]().
-The Flutter team cannot guarantee long-term availability of this service.
-You’re free to use other mirrors if they become available. If you’re
-interested in setting up your own mirror in China, contact
-[flutter-dev@googlegroups.com](mailto:flutter-dev@googlegroups.com)
-for assistance.
+`flutter-io.cn`服务器是[GDG China]()维护的Flutter依赖项和包的临时镜像。Flutter团队无法保证此服务的长期可用性。如果可用，您可以自由使用其他镜像。如果您有兴趣在中国设置自己的镜像，请联系[flutter-dev@googlegroups.com](mailto:flutter-dev@googlegroups.com)寻求帮助。
 
-## Community-run mirror sites
+## 社区运行的镜像站点
 
-* Shanghai Jiaotong University Linux User Group
+* 上海交通大学Linux用户组
   * `FLUTTER_STORAGE_BASE_URL`: [https://mirrors.sjtug.sjtu.edu.cn/](https://mirrors.sjtug.sjtu.edu.cn)
   * `PUB_HOSTED_URL`: [https://dart-pub.mirrors.sjtug.sjtu.edu.cn/](https://dart-pub.mirrors.sjtug.sjtu.edu.cn)

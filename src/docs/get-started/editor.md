@@ -1,22 +1,17 @@
 ---
-title: Set up an editor
+title: 设置编辑器
 prev:
-  title: Install
+  title: 安装
   path: /docs/get-started/install
 next:
-  title: Test drive
+  title: 试驾
   path: /docs/get-started/test-drive
 toc: false
 ---
 
-You can build apps with Flutter using any text editor combined with our
-command-line tools. However, we recommend using one of our editor plugins for an
-even better experience. These plugins provide you with code completion, syntax
-highlighting, widget editing assists, run & debug support, and more.
+您可以使用任何文本编辑器结合我们的命令行工具使用Flutter构建应用程序。但是，我们建议使用我们的编辑器插件之一，以获得更好的体验。这些插件为您提供代码完成，语法突出显示，窗口小部件编辑辅助，运行和调试支持等。
 
-Follow the steps below to add an editor plugin for Android Studio, IntelliJ, or
-VS Code. If you want to use a different editor, that's OK, skip ahead to the
-[next step: Test drive](/docs/get-started/test-drive).
+按照以下步骤为Android Studio，IntelliJ或VS Code添加编辑器插件。如果您想使用其他编辑器，那没问题，请跳到[下一步：试驾](/docs/get-started/test-drive)。
 
 {% comment %} Nav tabs {% endcomment -%}
 <ul class="nav nav-tabs" id="editor-setup" role="tablist">
@@ -33,57 +28,53 @@ VS Code. If you want to use a different editor, that's OK, skip ahead to the
 
 <div class="tab-pane active" id="androidstudio" role="tabpanel" aria-labelledby="androidstudio-tab" markdown="1">
 
-## Install Android Studio
+## 安装Android Studio
 
-Android Studio offers a complete, integrated IDE experience for Flutter.
+Android Studio为Flutter提供了完整的集成IDE体验。
 
-* [Android Studio]({{site.android-dev}}/studio), version 3.0 or later
+* [Android Studio]({{site.android-dev}}/studio) 3.0或更高版本
 
-Alternatively, you can also use IntelliJ:
+或者，您也可以使用IntelliJ：
 
-* [IntelliJ IDEA Community](https://www.jetbrains.com/idea/download/), version 2017.1 or later
-* [IntelliJ IDEA Ultimate](https://www.jetbrains.com/idea/download/), version 2017.1 or later
+* [IntelliJ IDEA社区版](https://www.jetbrains.com/idea/download/) 2017.1或更高版本
+* [IntelliJ IDEA旗舰版](https://www.jetbrains.com/idea/download/) 2017.1或更高版本
 
-## Install the Flutter and Dart plugins
+## 安装Flutter和Dart插件
 
-To install these:
+要安装这些：
 
- 1. Start Android Studio.
- 1. Open plugin preferences (**Preferences > Plugins** on macOS,
-    **File > Settings > Plugins** on Windows & Linux).
- 1. Select **Browse repositories**,  select the Flutter plugin and click
-    **Install**.
- 1. Click **Yes** when prompted to install the Dart plugin.
- 1. Click **Restart** when prompted.
+ 1. 启动Android Studio。
+ 1. 打开插件首选项（macOS上的**首选项 > 插件**，Windows和Linux上的**文件 > 设置 > 插件**）。
+ 1. 选择**浏览存储库**，选择Flutter插件并单击**安装**。
+ 1. 提示安装Dart插件时单击**是**。
+ 1. 提示时单击**重启**。
 
 </div>
 <div class="tab-pane" id="vscode" role="tabpanel" aria-labelledby="vscode-tab" markdown="1">
 
-## Install VS Code
+## 安装VS Code
 
-VS Code is a light-weight editor with Flutter app execution and debug support.
+VS Code是一个轻量级编辑器，具有Flutter应用程序执行和调试支持。
 
-* [VS Code](https://code.visualstudio.com/), latest stable version
+* [VS Code](https://code.visualstudio.com/)最新稳定版
 
-## Install the Flutter and Dart plugins
+## 安装Flutter和Dart插件
 
- 1. Start VS Code.
- 1. Invoke **View > Command Palette...**.
- 1. Type "install", and select **Extensions: Install Extensions**.
- 1. Type "flutter" in the extensions search field, select **Flutter** in the list,
-    and click **Install**. This also installs the required Dart plugin.
+ 1. 启动VS Code。
+ 1. 调用**视图 > 命令选项板....**。
+ 1. 输入“install”，然后选择**Extensions: Install Extensions**。
+ 1. 在扩展搜索字段中键入“flutter”，在列表中选择**Flutter**，然后单击**Install**。这也安装了所需的Dart插件。
 
-## Validate your setup with the Flutter Doctor
+## 使用Flutter Doctor验证您的设置
 
- 1. Invoke **View > Command Palette...**.
- 1. Type "doctor", and select the **Flutter: Run Flutter Doctor**.
- 1. Review the output in the **OUTPUT** pane for any issues.
+ 1. 调用**视图 > 命令选项板....**。
+ 1. 输入“doctor”，然后选择**Flutter: Run Flutter Doctor**。
+ 1. 检查**OUTPUT**窗格中的输出是否存在任何问题。
 
 </div>
 
 </div>{% comment %} End: Tab panes. {% endcomment -%}
 
-## Next step
+## 下一步
 
-Take Flutter for a test drive: create a first project, run it, and experience
-"hot reload".
+试驾Flutter：创建第一个项目，运行它，体验“热重载”。
