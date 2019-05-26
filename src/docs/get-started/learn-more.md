@@ -17,7 +17,7 @@ prev:
 ## 应用您现有的知识
 
 * [Android开发人员的Flutter](/docs/get-started/flutter-for/android-devs)
-* [从Java到Dart]({{site.codelabs}}/codelabs/from-java-to-dart)代码实验室
+* [从Java到Dart](/docs/get-started/flutter-for/java-devs)代码实验室
 * [iOS开发人员的Flutter](/docs/get-started/flutter-for/ios-devs)
 * [React Native开发人员的Flutter](/docs/get-started/flutter-for/react-native-devs)
 * [Web开发人员的Flutter](/docs/get-started/flutter-for/web-devs)
