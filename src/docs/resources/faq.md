@@ -441,7 +441,6 @@ Flutter是一个开源项目。目前，大部分开发工作都是由Google的�
 ### Apple会拒绝我的Flutter应用吗？
 
 我们不能代表Apple，但Apple的政策多年来一直在变化，他们的App Store包含许多使用Unity和Flutter等技术构建的应用程序。Apple甚至推出了像[Hamilton][Hamilton for iOS]这样的Flutter应用程序。
-Apple has even featured Flutter apps such as [Hamilton.][Hamilton for iOS]
 
 当然，Apple最终负责他们的生态系统，但我们的目标是继续尽我们所能确保将Flutter应用程序部署到Apple的App Store。
 

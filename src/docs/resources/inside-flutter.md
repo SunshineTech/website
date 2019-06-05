@@ -1,645 +1,208 @@
 ---
-title: Inside Flutter
+title: Flutter内幕
 ---
 
-This document describes the inner workings of the Flutter toolkit that make
-Flutter’s API possible. Because Flutter widgets are built using aggressive
-composition, user interfaces built with Flutter have a large number of
-widgets.  To support this workload, Flutter uses sublinear algorithms for
-layout and building widgets as well as data structures that make tree
-surgery efficient and that have a number of constant-factor optimizations.
-With some additional details, this design also makes it easy for developers
-to create infinite scrolling lists using callbacks that build exactly those
-widgets that are visible to the user.
-
-## Aggressive composability
-
-One of the most distinctive aspects of Flutter is its _aggressive
-composability_. Widgets are built by composing other widgets,
-which are themselves built out of progressively more basic widgets.
-For example, `Padding` is a widget rather than a property of other widgets.
-As a result, user interfaces built with Flutter consist of many,
-many widgets.
-
-The widget building recursion bottoms out in `RenderObjectWidgets`,
-which are widgets that create nodes in the underlying _render_ tree.
-The render tree is a data structure that stores the geometry of the user
-interface, which is computed during _layout_ and used during _painting_ and
-_hit testing_. Most Flutter developers do not author render objects directly
-but instead manipulate the render tree using widgets.
-
-In order to support aggressive composability at the widget layer,
-Flutter uses a number of efficient algorithms and optimizations at
-both the widget and render tree layers, which are described in the
-following subsections.
-
-### Sublinear layout
-
-With a large number of widgets and render objects, the key to good
-performance is efficient algorithms. Of paramount importance is the
-performance of _layout_, which is the algorithm that determines the
-geometry (for example, the size and position) of the render objects.
-Some other toolkits use layout algorithms that are O(N²) or worse
-(for example, fixed-point iteration in some constraint domain).
-Flutter aims for linear performance for initial layout, and _sublinear
-layout performance_ in the common case of subsequently updating an
-existing layout. Typically, the amount of time spent in layout should
-scale more slowly than the number of render objects.
-
-Flutter performs one layout per frame, and the layout algorithm works
-in a single pass. _Constraints_ are passed down the tree by parent
-objects calling the layout method on each of their children.
-The children recursively perform their own layout and then return
-_geometry_ up the tree by returning from their layout method. Importantly,
-once a render object has returned from its layout method, that render
-object will not be visited again<sup><a href="#a1">1</a></sup>
-until the layout for the next frame. This approach combines what might
-otherwise be separate measure and layout passes into a single pass and,
-as a result, each render object is visited _at most
-twice_<sup><a href="#a2">2</a></sup> during layout: once on the way
-down the tree, and once on the way up the tree.
-
-Flutter has several specializations of this general protocol.
-The most common specialization is `RenderBox`, which operates in
-two-dimensional, cartesian coordinates. In box layout, the constraints
-are a min and max width and a min and max height. During layout,
-the child determines its geometry by choosing a size within these bounds.
-After the child returns from layout, the parent decides the child's
-position in the parent's coordinate system<sup><a href="#a3">3</a></sup>.
-Notice that the child's layout cannot depend on the child's position
-because the child's position is not determined until after the child
-returns from layout. As a result, the parent is free to reposition
-the child without needing to recompute the child's layout.
-
-More generally, during layout, the _only_ information that flows from
-parent to child are the constraints and the _only_ information that
-flows from child to parent is the geometry. These invariants can reduce
-the amount of work required during layout:
-
-* If the child has not marked its own layout as dirty, the child can
-  return immediately from layout, cutting off the walk, as long as the
-  parent gives the child the same constraints as the child received
-  during the previous layout.
-
-* Whenever a parent calls a child's layout method, the parent indicates
-  whether it uses the size information returned from the child. If,
-  as often happens, the parent does not use the size information,
-  then the parent need not recompute its layout if the child selects
-  a new size because the parent is guaranteed that the new size will
-  conform to the existing constraints.
-
-* _Tight_ constraints are those that can be satisfied by exactly one
-  valid geometry. For example, if the min and max widths are equal to
-  each other and the min and max heights are equal to each other,
-  the only size that satisfies those constraints is one with that
-  width and height. If the parent provides tight constraints,
-  then the parent need not recompute its layout whenever the child
-  recomputes its layout, even if the parent uses the child's size
-  in its layout, because the child cannot change size without new
-  constraints from its parent.
-
-* A render object can declare that it uses the constraints provided
-  by the parent only to determine its geometry. Such a declaration
-  informs the framework that the parent of that render object does
-  not need to recompute its layout when the child recomputes its layout
-  _even if the constraints are not tight_ and _even if the parent's
-  layout depends on the child's size_, because the child cannot change
-  size without new constraints from its parent.
-
-As a result of these optimizations, when the render object tree contains
-dirty nodes, only those nodes and a limited part of the subtree around
-them are visited during layout.
-
-### Sublinear widget building
-
-Similar to the layout algorithm, Flutter's widget building algorithm
-is sublinear. After being built, the widgets are held by the _element
-tree_, which retains the logical structure of the user interface.
-The element tree is necessary because the widgets themselves are
-_immutable_, which means (among other things), they cannot remember their
-parent or child relationships with other widgets. The element tree also
-holds the _state_ objects associated with stateful widgets.
-
-In response to user input (or other stimuli), an element can become dirty,
-for example if the developer calls `setState()` on the associated state
-object. The framework keeps a list of dirty elements and jumps directly
-to them during the _build_ phase, skipping over clean elements. During
-the build phase, information flows _unidirectionally_ down the element
-tree, which means each element is visited at most once during the build
-phase.  Once cleaned, an element cannot become dirty again because,
-by induction, all its ancestor elements are also
-clean<sup><a href="#a4">4</a></sup>.
-
-Because widgets are _immutable_, if an element has not marked itself as
-dirty, the element can return immediately from build, cutting off the walk,
-if the parent rebuilds the element with an identical widget. Moreover,
-the element need only compare the object identity of the two widget
-references in order to establish that the new widget is the same as
-the old widget. Developers exploit this optimization to implement the
-_reprojection_ pattern, in which a widget includes a prebuilt child
-widget stored as a member variable in its build.
-
-During build, Flutter also avoids walking the parent chain using
-`InheritedWidgets`. If widgets commonly walked their parent chain,
-for example to determine the current theme color, the build phase
-would become O(N²) in the depth of the tree, which can be quite
-large due to aggressive composition. To avoid these parent walks,
-the framework pushes information down the element tree by maintaining
-a hash table of `InheritedWidget`s at each element. Typically, many
-elements will reference the same hash table, which changes only at
-elements that introduce a new `InheritedWidget`.
-
-### Linear reconciliation
-
-Contrary to popular belief, Flutter does not employ a tree-diffing
-algorithm. Instead, the framework decides whether to reuse elements by
-examining the child list for each element independently using an O(N)
-algorithm. The child list reconciliation algorithm optimizes for the
-following cases:
-
-* The old child list is empty.
-* The two lists are identical.
-* There is an insertion or removal of one or more widgets in exactly
-  one place in the list.
-* If each list contains a widget with the same key, the two widgets are
-  matched.
-
-The general approach is to match up the beginning and end of both child
-lists by comparing the runtime type and key of each widget,
-potentially finding a non-empty range in the middle of each list
-that contains all the unmatched children. The framework then places
-the children in the range in the old child list into a hash table
-based on their keys. Next, the framework walks the range in the new
-child list and queries the hash table by key for matches. Unmatched
-children are discarded and rebuilt from scratch whereas matched children
-are rebuilt with their new widgets.
-
-### Tree surgery
-
-Reusing elements is important for performance because elements own
-two critical pieces of data: the state for stateful widgets and the
-underlying render objects. When the framework is able to reuse an element,
-the state for that logical part of the user interface is preserved
-and the layout information computed previously can be reused,
-often avoiding entire subtree walks. In fact, reusing elements is
-so valuable that Flutter supports _non-local_ tree mutations that
-preserve state and layout information.
-
-Developers can perform a non-local tree mutation by associating a `GlobalKey`
-with one of their widgets. Each global key is unique throughout the
-entire application and is registered with a thread-specific hash table.
-During the build phase, the developer can move a widget with a global
-key to an arbitrary location in the element tree. Rather than building
-a fresh element at that location, the framework will check the hash
-table and reparent the existing element from its previous location to
-its new location, preserving the entire subtree.
-
-The render objects in the reparented subtree are able to preserve
-their layout information because the layout constraints are the only
-information that flows from parent to child in the render tree.
-The new parent is marked dirty for layout because its child list has
-changed, but if the new parent passes the child the same layout
-constraints the child received from its old parent, the child can
-return immediately from layout, cutting off the walk.
-
-Global keys and non-local tree mutations are used extensively by
-developers to achieve effects such as hero transitions and navigation.
-
-### Constant-factor optimizations
-
-In addition to these algorithmic optimizations, achieving aggressive
-composability also relies on several important constant-factor
-optimizations. These optimizations are most important at the leaves of
-the major algorithms discussed above.
-
-* **Child-model agnostic.** Unlike most toolkits, which use child lists,
-  Flutter’s render tree does not commit to a specific child model.
-  For example, the `RenderBox` class has an abstract `visitChildren()`
-  method rather than a concrete _firstChild_ and _nextSibling_ interface.
-  Many subclasses support only a single child, held directly as a member
-  variable, rather than a list of children. For example, `RenderPadding`
-  supports only a single child and, as a result, has a simpler layout
-  method that takes less time to execute.
-
-* **Visual render tree, logical widget tree.** In Flutter, the render
-  tree operates in a device-independent, visual coordinate system,
-  which means smaller values in the x coordinate are always towards
-  the left, even if the current reading direction is right-to-left.
-  The widget tree typically operates in logical coordinates, meaning
-  with _start_ and _end_ values whose visual interpretation depends
-  on the reading direction. The transformation from logical to visual
-  coordinates is done in the handoff between the widget tree and the
-  render tree. This approach is more efficient because layout and
-  painting calculations in the render tree happen more often than the
-  widget-to-render tree handoff and can avoid repeated coordinate conversions.
-
-* **Text handled by a specialized render object.** The vast majority
-  of render objects are ignorant of the complexities of text. Instead,
-  text is handled by a specialized render object, `RenderParagraph`,
-  which is a leaf in the render tree. Rather than subclassing a
-  text-aware render object, developers incorporate text into their
-  user interface using composition. This pattern means `RenderParagraph`
-  can avoid recomputing its text layout as long as its parent supplies
-  the same layout constraints, which is common, even during tree surgery.
-
-* **Observable objects.** Flutter uses both the model-observation and
-  the reactive paradigms. Obviously, the reactive paradigm is dominant,
-  but Flutter uses observable model objects for some leaf data structures.
-  For example, _Animations_ notify an observer list when their value changes.
-  Flutter hands off these observable objects from the widget tree to the
-  render tree, which observes them directly and invalidates only the
-  appropriate stage of the pipeline when they change. For example,
-  a change to an _Animation<Color>_ might trigger only the paint phase
-  rather than both the build and paint phases.
-
-Taken together and summed over the large trees created by aggressive
-composition, these optimizations have a substantial effect on performance.
-
-## Infinite scrolling
-
-Infinite scrolling lists are notoriously difficult for toolkits.
-Flutter supports infinite scrolling lists with a simple interface
-based on the _builder_ pattern, in which a `ListView` uses a callback
-to build widgets on demand as they become visible to the user during
-scrolling. Supporting this feature requires _viewport-aware layout_
-and _building widgets on demand_.
-
-### Viewport-aware layout
-
-Like most things in Flutter, scrollable widgets are built using
-composition. The outside of a scrollable widget is a `Viewport`,
-which is a box that is "bigger on the inside," meaning its children
-can extend beyond the bounds of the viewport and can be scrolled into
-view. However, rather than having `RenderBox` children, a viewport has
-`RenderSliver` children, known as _slivers_, which have a viewport-aware
-layout protocol.
-
-The sliver layout protocol matches the structure of the box layout
-protocol in that parents pass constraints down to their children and
-receive geometry in return. However, the constraint and geometry data
-differs between the two protocols. In the sliver protocol, children
-are given information about the viewport, including the amount of
-visible space remaining. The geometry data they return enables a
-variety of scroll-linked effects, including collapsible headers and
-parallax.
-
-Different slivers fill the space available in the viewport in different
-ways. For example, a sliver that produces a linear list of children lays
-out  each child in order until the sliver either runs out of children or
-runs out of space. Similarly, a sliver that produces a two-dimensional
-grid of children fills only the portion of its grid that is visible.
-Because they are aware of how much space is visible, slivers can produce
-a finite number of children even if they have the potential to produce
-an unbounded number of children.
-
-Slivers can be composed to create bespoke scrollable layouts and effects.
-For example, a single viewport can have a collapsible header followed
-by a linear list and then a grid. All three slivers will cooperate through
-the sliver layout protocol to produce only those children that are actually
-visible through the viewport, regardless of whether those children belong
-to the header, the list, or the grid.
-
-### Building widgets on demand
-
-If Flutter had a strict _build-then-layout-then-paint_ pipeline,
-the foregoing would be insufficient to implement an infinite scrolling
-list because the information about how much space is visible through
-the viewport is available only during the layout phase. Without
-additional machinery, the layout phase is too late to build the
-widgets necessary to fill the space. Flutter solves this problem
-by interleaving the build and layout phases of the pipeline. At any
-point in the layout phase, the framework can start building new
-widgets on demand _as long as those widgets are descendants of the
-render object currently performing layout_.
-
-Interleaving build and layout is possible only because of the strict
-controls on information propagation in the build and layout algorithms.
-Specifically, during the build phase, information can propagate only
-down the tree. When a render object is performing layout, the layout
-walk has not visited the subtree below that render object, which means
-writes generated by building in that subtree cannot invalidate any
-information that has entered the layout calculation thus far. Similarly,
-once layout has returned from a render object, that render object will
-never be visited again during this layout, which means any writes
-generated by subsequent layout calculations cannot invalidate the
-information used to build the render object’s subtree.
-
-Additionally, linear reconciliation and tree surgery are essential
-for efficiently updating elements during scrolling and for modifying
-the render tree when elements are scrolled into and out of view at
-the edge of the viewport.
-
-## API Ergonomics
-
-Being fast only matters if the framework can actually be used effectively.
-To guide Flutter's API design towards greater usability, Flutter has been
-repeatedly tested in extensive UX studies with developers. These studies
-sometimes confirmed pre-existing design decisions, sometimes helped guide
-the prioritization of features, and sometimes changed the direction of the
-API design. For instance, Flutter's APIs are heavily documented; UX
-studies confirmed the value of such documentation, but also highlighted
-the need specifically for sample code and illustrative diagrams.
-
-This section discusses some of the decisions made in Flutter's API design
-in aid of usability.
-
-### Specializing APIs to match the developer's mindset
-
-The base class for nodes in Flutter's `Widget`, `Element`, and `RenderObject`
-trees does not define a child model. This allows each node to be
-specialized for the child model that is applicable to that node.
-
-Most `Widget` objects have a single child `Widget`, and therefore only expose
-a single `child` parameter. Some widgets support an arbitrary number of
-children, and expose a `children` parameter that takes a list.
-Some widgets don't have any children at all and reserve no memory,
-and have no parameters for them. Similarly, `RenderObjects` expose APIs
-specific to their child model. `RenderImage` is a leaf node, and has no
-concept of children. `RenderPadding` takes a single child, so it has storage
-for a single pointer to a single child. `RenderFlex` takes an arbitrary
-number of children and manages it as a linked list.
-
-In some rare cases, more complicated child models are used. The
-`RenderTable` render object's constructor takes an array of arrays of
-children, the class exposes getters and setters that control the number
-of rows and columns, and there are specific methods to replace
-individual children by x,y coordinate, to add a row, to provide a
-new array of arrays of children, and to replace the entire child list
-with a single array and a column count. In the implementation,
-the object does not use a linked list like most render objects but
-instead uses an indexable array.
-
-The `Chip` widgets and `InputDecoration` objects have fields that match
-the slots that exist on the relevant controls. Where a one-size-fits-all
-child model would force semantics to be layered on top of a list of
-children, for example, defining the first child to be the prefix value
-and the second to be the suffix, the dedicated child model allows for
-dedicated named properties to be used instead.
-
-This flexibility allows each node in these trees to be manipulated in
-the way most idiomatic for its role. It's rare to want to insert a cell
-in a table, causing all the other cells to wrap around; similarly,
-it's rare to want to remove a child from a flex row by index instead
-of by reference.
-
-The `RenderParagraph` object is the most extreme case: it has a child of
-an entirely different type, `TextSpan`. At the `RenderParagraph` boundary,
-the `RenderObject` tree transitions into being a `TextSpan` tree.
-
-The overall approach of specializing APIs to meet the developer's
-expectations is applied to more than just child models.
-
-Some rather trivial widgets exist specifically so that developers
-will find them when looking for a solution to a problem. Adding a
-space to a row or column is easily done once one knows how, using
-the `Expanded` widget and a zero-sized `SizedBox` child, but discovering
-that pattern is unnecessary because searching for `space`
-uncovers the `Spacer` widget, which uses `Expanded` and `SizedBox` directly
-to achieve the effect.
-
-Similarly, hiding a widget subtree is easily done by not including the
-widget subtree in the build at all. However, developers typically expect
-there to be a widget to do this, and so the `Visibility` widget exists
-to wrap this pattern in a trivial reusable widget.
-
-### Explicit arguments
-
-UI frameworks tend to have many properties, such that a developer is
-rarely able to remember the semantic meaning of each constructor
-argument of each class. As Flutter uses the reactive paradigm,
-it is common for build methods in Flutter to have many calls to
-constructors. By leveraging Dart's support for named arguments,
-Flutter's API is able to keep such build methods clear and understandable.
-
-This pattern is extended to any method with multiple arguments,
-and in particular is extended to any boolean argument, so that isolated
-`true` or `false` literals in method calls are always self-documenting.
-Furthermore, to avoid confusion commonly caused by double negatives
-in APIs, boolean arguments and properties are always named in the
-positive form (for example, `enabled: true` rather than `disabled: false`).
-
-### Paving over pitfalls
-
-A technique used in a number of places in the Flutter framework is to
-define the API such that error conditions don't exist. This removes
-entire classes of errors from consideration.
-
-For example, interpolation functions allow one or both ends of the
-interpolation to be null, instead of defining that as an error case:
-interpolating between two null values is always null, and interpolating
-from a null value or to a null value is the equivalent of interpolating
-to the zero analog for the given type. This means that developers
-who accidentally pass null to an interpolation function will not hit
-an error case, but will instead get a reasonable result.
-
-A more subtle example is in the `Flex` layout algorithm. The concept of
-this layout is that the space given to the flex render object is
-divided among its children, so the size of the flex should be the
-entirety of the available space. In the original design, providing
-infinite space would fail: it would imply that the flex should be
-infinitely sized, a useless layout configuration. Instead, the API
-was adjusted so that when infinite space is allocated to the flex
-render object, the render object sizes itself to fit the desired
-size of the children, reducing the possible number of error cases.
-
-The approach is also used to avoid having constructors that allow
-inconsistent data to be created. For instance, the `PointerDownEvent`
-constructor does not allow the `down` property of `PointerEvent` to
-be set to `false` (a situation that would be self-contradictory);
-instead, the constructor does not have a parameter for the `down`
-field and always sets it to `true`.
-
-In general, the approach is to define valid interpretations for all
-values in the input domain. The simplest example is the `Color` constructor.
-Instead of taking four integers, one for red, one for green,
-one for blue, and one for alpha, each of which could be out of range,
-the default constructor takes a single integer value, and defines
-the meaning of each bit (for example, the bottom eight bits define the
-red component), so that any input value is a valid color value.
-
-A more elaborate example is the `paintImage()` function. This function
-takes eleven arguments, some with quite wide input domains, but they
-have been carefully designed to be mostly orthogonal to each other,
-such that there are very few invalid combinations.
-
-### Reporting error cases aggressively
-
-Not all error conditions can be designed out. For those that remain,
-in debug builds, Flutter generally attempts to catch the errors very
-early and immediately reports them. Asserts are widely used.
-Constructor arguments are sanity checked in detail. Lifecycles are
-monitored and when inconsistencies are detected they immediately
-cause an exception to be thrown.
-
-In some cases, this is taken to extremes: for example, when running
-unit tests, regardless of what else the test is doing, every `RenderBox`
-subclass that is laid out aggressively inspects whether its intrinsic
-sizing methods fulfill the intrinsic sizing contract. This helps catch
-errors in APIs that might otherwise not be exercised.
-
-When exceptions are thrown, they include as much information as
-is available. Some of Flutter's error messages proactively probe the
-associated stack trace to determine the most likely location of the
-actual bug. Others walk the relevant trees to determine the source
-of bad data. The most common errors include detailed instructions
-including in some cases sample code for avoiding the error, or links
-to further documentation.
-
-### Reactive paradigm
-
-Mutable tree-based APIs suffer from a dichotomous access pattern:
-creating the tree's original state typically uses a very different
-set of operations than subsequent updates. Flutter's rendering layer
-uses this paradigm, as it is an effective way to maintain a persistent tree,
-which is key for efficient layout and painting. However, it means
-that direct interaction with the rendering layer is awkward at best
-and bug-prone at worst.
-
-Flutter's widget layer introduces a composition mechanism using the
-reactive paradigm to manipulate the underlying rendering tree.
-This API abstracts out the tree manipulation by combining the tree
-creation and tree mutation steps into a single tree description (build)
-step, where, after each change to the system state, the new configuration
-of the user interface is described by the developer and the framework
-computes the series of tree mutations necessary to reflect this new
-configuration.
-
-### Interpolation
-
-Since Flutter's framework encourages developers to describe the interface
-configuration matching the current application state, a mechanism exists
-to implicitly animate between these configurations.
-
-For example, suppose that in state S<sub>1</sub> the interface consists
-of a circle, but in state S<sub>2</sub> it consists of a square.
-Without an animation mechanism, the state change would have a jarring
-interface change. An implicit animation allows the circle to be smoothly
-squared over several frames.
-
-Each feature that can be implicitly animated has a stateful widget that
-keeps a record of the current value of the input, and begins an animation
-sequence whenever the input value changes, transitioning from the current
-value to the new value over a specified duration.
+本文档描述了使Flutter的API成为可能的Flutter工具包的内部工作原理。因为Flutter小部件是使用积极的组合构建的，所以使用Flutter构建的用户界面具有大量小部件。为了支持这种工作负载，Flutter使用次线性算法来布局和构建小部件以及使树手术高效且具有许多恒定因子优化的数据结构。通过一些额外的细节，这种设计还使开发人员可以使用回调来轻松创建无限滚动列表，这些回调可以构建用户可见的小部件。
+
+## 积极的可组合性
+
+Flutter最独特的一个方面是其 _积极的可组合性_。小部件是通过组合其他小部件构建的，这些小部件本身是由逐步更基本的小部件构建的。例如，`Padding`是一个小部件而不是其他小部件的属性。因此，使用Flutter构建的用户界面由许多小部件组成。
+
+在`renderObjectWidgets`中构建递归的小部件从下到下，它是在底层 _渲染_ 树中创建节点的小部件。渲染树是存储用户界面几何图形的数据结构，该几何图形在 _布局_ 期间计算，并在 _绘制_ 和 _命中测试 _期间使用。大多数flutter开发人员不直接编写渲染对象，而是使用小部件操作渲染树。
+
+为了在小部件层支持积极的可组合性，Flutter在小部件和渲染树层使用了许多有效的算法和优化，这些将在以下小节中介绍。
+
+### 次线性布局
+
+使用大量小部件和渲染对象，良好性能的关键是高效的算法。最重要的是 _布局_ 的性能，布局是确定渲染对象的几何图形（例如，大小和位置）的算法。其他一些工具包使用O(N²)或更差的（例如，某些约束域中的定点迭代）布局算法。Flutter的目标是初始布局的线性性能，以及随后更新现有布局的常见情况下的 _次线性布局性能_。通常，在布局中花费的时间应该比渲染对象的数量缩放得慢。
+
+Flutter每帧执行一个布局，布局算法一次完成。_约束_ 由调用每个子对象的布局方法的父对象向下传递给树。子对象递归地执行自己的布局，然后通过从其布局方法返回将 _几何图形_ 向上返回到树中。重要的是，一旦渲染对象从其布局方法返回，该渲染对象将不再被访问<sup><a href="#a1">1</a></sup>，直到下一帧的布局。这种方法将可能单独的度量和布局传递组合成单个传递，因此，每个渲染对象在布局期间访问 _最多两次_<sup><a href="#a2">2</a></sup>：一次向下到树，一次向上到树。
+
+Flutter有这个通用协议的几个专业。最常见的专业是1RenderBox1，它以二维笛卡尔坐标运算。在框布局中，约束是最小和最大宽度以及最小和最大高度。在布局期间，子项通过选择这些边界内的大小来确定其几何图形。子项从布局返回后，父项决定子项在父项坐标系<sup><a href="#a3">3</a></sup>中的位置。请注意，子项的布局不能取决于子项的位置，因为子项的位置直到子项从布局返回后才确定。因此，父项可以自由地重新定位子项而无需重新计算子项的布局。
+
+更一般地说，在布局期间，从父节点流向子节点的 _唯一_ 信息是约束，从子节点流向父节点的 _唯一_ 信息是几何图形。这些不变量可以减少布局期间所需的工作量：
+
+* 如果子节点没有将自己的布局标记为脏，只要父节点给子节点的约束与子节点在前一个布局中收到的约束相同，则子节点可以立即从布局返回，切断遍历。
+
+* 每当父节点调用子节点的布局方法时，父节点指示它是否使用从子节点返回的大小信息。如果经常发生，父节点不使用大小信息，那么如果子节点选择新大小，则父节点不需要重新计算其布局，因为父节点保证新大小将符合现有约束。
+
+* _严格约束_ 是指那些恰好一个有效几何图形可以满足的约束。例如，如果最小和最大宽度彼此相等并且最小和最大高度彼此相等，则满足这些约束的唯一大小是具有该宽度和高度的大小。如果父节点提供严格约束，则父节点无需在子节点重新计算其布局时重新计算布局，即使父节点在其布局中使用子节点的大小，因为子节点在没有父节点的新约束的情况下也无法更改大小。
+
+* 渲染对象可以声明它仅使用父节点提供的约束来确定其几何图形。这样的声明通知框架该渲染对象的父节点在子节点重新计算其布局时不需要重新计算布局，_即使约束不严格_，_即使父节点的布局取决于子节点的大小_，因为子节点在没有来自父节点的新约束的情况下无法更改大小。
+
+作为这些优化的结果，当渲染对象树包含脏节点时，在布局期间仅访问那些节点以及它们周围的子树的有限部分。
+
+### 次线性小部件构建
+
+与布局算法类似，Flutter的小部件构建算法是次线性的。构建之后，小部件由元素树保存，_元素树_ 保留用户界面的逻辑结构。元素树是必要的，因为小部件本身是 _不可变的_，这意味着（除其他外），它们不能记住它们与其他小部件的父或子关系。元素树还包含与有状态小部件关联的 _状态_ 对象。
+
+响应于用户输入（或其他刺激），元素可能变脏，例如，如果开发人员在关联的状态对象上调用`setState()`。框架保留一个脏元素列表，并在 _构建_ 阶段直接跳转到它们，跳过干净的元素。在构建阶段，信息在元素树中向下 _单向_ 流动，这意味着在构建阶段期间每个元素最多被访问一次。清洁后，元素不会再次变脏，因为通过感应，它的所有祖先元素也都是干净的<sup><a href="#a4">4</a></sup>。
+
+因为小部件是 _不可变的_，所以如果元素没有将自己标记为脏，则元素可以立即从构建返回，如果父级使用相同的小部件重建元素，则会切断遍历。此外，元素只需要比较两个小部件引用的对象标识，以确定新小部件与旧小部件相同。开发人员利用此优化来实现 _重投影_ 模式，其中小部件包括存储为其构建中的成员变量的预构建子小部件。
+
+在构建期间，Flutter还避免使用`InheritedWidget`遍历父链。如果小部件通常遍历其父链，例如确定当前的主题颜色，则构建阶段将在树的深度变为O(N²)，由于积极组合，这可能非常大。为了避免这些父遍历，框架通过在每个元素上维护一个`InheritedWidget`的哈希表来向下推送元素树中的信息。通常，许多元素将引用相同的哈希表，该哈希表仅在引入新`InheritedWidget`的元素上进行更改。
+
+### 线性调节
+
+与流行的看法相反，Flutter没有采用树差分算法。相反，框架通过使用O(N)算法独立地检查每个元素的子列表来决定是否重用元素。子列表调节算法针对以下情况进行了优化：
+
+* 旧子列表为空。
+* 两个列表相同。
+* 在列表中恰好一个位置插入或删除一个或多个小部件。
+* 如果每个列表包含具有相同键的小部件，则两个小部件匹配。
+
+一般方法是通过比较每个小部件的运行时类型和键来匹配两个子列表的开头和结尾，可能在包含所有不匹配子节点的每个列表的中间找到非空范围。然后，框架将旧子列表范围中的子项放入基于其键的哈希表中。接下来，框架遍历新子列表中的范围，并按键查询哈希表以进行匹配。不匹配的子项被丢弃并从头开始重建，而匹配的子项则用其新小部件重建。
+
+### 树手术
+
+重用元素对性能很重要，因为元素拥有两个关键数据：有状态小部件的状态和底层的渲染对象。当框架能够重用元素时，保留用户界面的逻辑部分的状态，并且可以重用先前计算的布局信息，通常避免整个子树遍历。实际上，重用元素非常有价值，以至于Flutter支持保留状态和布局信息的 _非本地_ 树突变。
+
+开发人员可以通过将`GlobalKey`与其中一个小部件相关联来执行非本地树突变。每个全局键在整个应用程序中都是唯一的，并使用特定于线程的哈希表进行注册。在构建阶段，开发人员可以使用全局键将小部件移动到元素树中的任意位置。框架将检查哈希表并将现有元素从其先前位置重定父级到新位置，从而保留整个子树，而不是在该位置构建新元素。
+
+重定父级的子树中的渲染对象能够保留其布局信息，因为布局约束是渲染树中从父级流向子级的唯一信息。新的父级被标记为布局脏，因为其子列表已更改，但如果新的父级传递给子级其从其旧父级接收的相同布局限制，则子级可以立即从布局返回，从而切断遍历。
+
+开发人员广泛使用全局键和非本地树突变来实现英雄过渡和导航等效果。
+
+### 恒定因子优化
+
+除了这些算法优化之外，实现积极的可组合性还依赖于几个重要的恒定因子优化。这些优化在上面讨论的主要算法的叶子中是最重要的。
+
+* **子模型不可知论者。** 与大多数使用子列表的工具包不同，Flutter的渲染树不会提交给特定的子模型。例如，`RenderBox`类具有抽象的`visitChildren()`方法，而不是具体的 _firstChild_ 和 _nextSibling_ 接口。许多子类仅支持单个子项，直接作为成员变量而不是子项列表。例如，`RenderPadding`仅支持单个子节点，因此，具有更简单的执行时间更短的布局方法。
+
+* **可视化渲染树，逻辑小部件树。** 在Flutter中，渲染树在与设备无关的可视坐标系中运行，这意味着即使当前读取方向是从右到左，x坐标中的较小值也始终向左。小部件树通常在逻辑坐标中操作，意味着具有开始和结束值，其视觉解释取决于读取方向。从逻辑坐标到可视坐标的转换是在小部件树和渲染树之间的切换中完成的。 这种方法更有效，因为渲染树中的布局和绘制计算比小部件到渲染树的切换更频繁，并且可以避免重复的坐标转换。
+
+* **由专门的渲染对象处理的文本。** 绝大多数渲染对象都不了解文本的复杂性。相反，文本由专门的渲染树中叶子的渲染对象`RenderParagraph`处理。开发人员不是子类化文本感知渲染对象，而是使用组合将文本合并到用户界面中。这种模式意味着`RenderParagraph`可以避免重新计算其文本布局，只要其父级提供相同的布局约束，即使在树木手术期间也是如此。
+
+* **可观察对象。** Flutter使用模型观察和反应范式。显然，反应范式占主导地位，但Flutter对某些叶子数据结构使用可观察的模型对象。例如，Animation在其值发生变化时通知观察者列表。Flutter将这些可观察对象从小部件树移交给渲染树，渲染树直接观察它们并且在它们改变时仅使管道的适当阶段无效。例如，对 _Animation_ 的更改可能仅触发绘制阶段，而不是构建和绘制阶段。
+
+综合并总结了由积极组合创建的大型树，这些优化对性能有重大影响。
+
+## 无限滚动
+
+无限滚动列表对于工具包来说是非常困难的。Flutter支持基于 _构建器_ 模式的简单接口的无限滚动列表，其中`ListView`使用回调按需构建小部件，因为它们在滚动期间对用户可见。支持此功能需要 _视口感知布局_ 并 _按需构建小部件_。
+
+### 视口感知布局
+
+像Flutter中的大多数东西一样，可滚动的小部件是使用组合构建的。可滚动小部件的外部是一个视口（Viewport），它是一个“内部较大”的框，这意味着它的子视图可以超出视口的边界，并可以滚动到视图中。但是，视口不具有`RenderBox`子元素，而具有`RenderSliver`子元素，称为 _sliver_，具有视口感知布局协议。
+
+sliver布局协议与框布局协议的结构相匹配，因为父级将约束传递给子级并接收返回中的几何图形。但是，约束和几何数据在两个协议之间不同。在sliver协议中，向子级提供有关视口的信息，包括剩余的可见空间量。它们返回的几何数据启用了各种滚动链接效果，包括可折叠标题和视差。
+
+不同的sliver以不同的方式填充视口中可用的空间。例如，产生线性子列表的sliver按顺序排列每个子项，直到sliver用完子项或用完空间。类似地，产生二维子网格的sliver仅填充其可见的网格部分。因为他们知道有多少空间是可见的，即使他们有可能产生无限数量的子项，只产生有限数量的子项。
+
+可以组合Sliver来创建定制的可滚动布局和效果。例如，单个视口可以具有可折叠标题，后跟线性列表，然后是网格。所有三个sliver都将通过sliver布局协议进行合作，以仅生成通过视口实际可见的子项，无论这些子项是否属于标题，列表或网格。
+
+### 按需构建小部件
+
+如果Flutter有一个严格的 _构建 - 然后 - 布局 - 然后 - 绘制_ 管道，前面的内容将不足以实现无限滚动列表，因为通过视口可以看到多少空间的信息仅在布局阶段可用。如果没有额外的机器，布局阶段就太晚了，无法构建填充空间所需的小部件。Flutter通过交错管道的构建和布局阶段来解决这个问题。在布局阶段的任何时候，_只要这些小部件是当前执行布局的渲染对象的后代_，框架就可以开始按需构建新的小部件。
+
+只有在构建和布局算法中对信息传播进行严格控制，才能实现交错构建和布局。具体而言，在构建阶段，信息只能沿树传播。当渲染对象执行布局时，布局遍历没有访问该渲染对象下面的子树，这意味着通过在该子树中构建而生成的写入不能使到目前为止已进入布局计算的任何信息无效。类似地，一旦布局从渲染对象返回，在此布局期间将永远不再访问该渲染对象，这意味着后续布局计算生成的任何写入都不会使用于构建渲染对象的子树的信息无效。
+
+此外，线性调节和树手术对于在滚动期间有效更新元素以及在元素在视口边缘滚动进出视图时修改渲染树至关重要。
+
+## API人体工程学
+
+快速只有在框架可以实际有效使用时才有意义。为了引导Flutter的API设计更具可用性，Flutter已经在开发人员的广泛用户体验研究中反复测试过。这些研究有时会确认已有的设计决策，有时可以帮助指导功能的优先级，有时会改变API设计的方向。例如，Flutter的API记录很多；用户体验研究证实了此类文档的价值，但也强调了专门针对示例代码和说明性图表的需求。
+
+本节讨论Flutter API设计中为帮助可用性而做出的一些决策。
+
+### 匹配开发人员思维模式的专门API
+
+Flutter的`Widget`，`Element`和`RenderObject`树中节点的基类未定义子模型。这允许每个节点专用于适用于该节点的子模型。
+
+大多数`Widget`对象都有一个子`Widget`，因此只公开一个`child`参数。一些小部件支持任意数量的子节点，并公开接受列表的`children`参数。有些小部件根本没有任何子节点，并且没有内存，也没有任何参数。同样，`RenderObjects`公开特定于其子模型的API。`RenderImage`是叶节点，没有子节点的概念。`RenderPadding`只接受一个子节点，因此它具有单子节点的单个指针的存储。`RenderFlex`接受任意数量的子节点并将其作为链表进行管理。
+
+在一些罕见的情况下，使用更复杂的子模型。`RenderTable`渲染对象的构造函数接受一个子节点数组的数组，该类公开控制行数和列数的getter和setter，并且有一些特定的方法可以用x，y坐标替换单个子节点，以添加一行，以提供一个新的子节点数组的数组，并用一个数组和一个列数替换整个子列表。在实现中，对象不像大多数渲染对象那样使用链表，而是使用可索引数组。
+
+`Chip`小部件和`InputDecoration`对象具有与相关控件上存在的插槽匹配的字段。如果一个通用的子模型将强制语义分层在子列表之上，例如，将第一个子项定义为前缀值，将第二个子项定义为后缀，则专用子模型允许使用专用的命名属性。
+
+这种灵活性允许这些树中的每个节点以其最常用的角色进行操作。很少想要在表格中插入一个单元格，导致所有其他单元格换行；同样，很少想要通过索引而不是通过引用从flex行中删除子项。
+
+`RenderParagraph`对象是最极端的情况：它有一个完全不同类型（`TextSpan`）的子节点。在`RenderParagraph`边界处，`RenderObject`树转换为`TextSpan`树。
+
+专门用于满足开发人员期望的API的整体方法不仅适用于子模型。
+
+一些相当琐碎的小部件专门存在，以便开发人员在寻找问题的解决方案时找到它们。一旦知道如何使用`Expanded`小部件和零大小的`SizedBox`子项，就可以轻松地为行或列添加空格，但发现该模式是不必要的，因为搜索`space`会发现直接使用`Expanded`和`SizedBox`达到效果的`Spacer`小部件。
+
+类似地，通过根本不在构建中包括小部件子树，可以容易地隐藏小部件子树。但是，开发人员通常希望有一个小部件来执行此操作，因此存在`Visibility`小部件以将此模式包装在一个简单的可重用小部件中。
+
+### 显式参数
+
+UI框架往往具有许多属性，因此开发人员很少能够记住每个类的每个构造函数参数的语义含义。由于Flutter使用反应范式，因此Flutter中的构建方法通常会对构造函数进行多次调用。 通过利用Dart对命名参数的支持，Flutter的API能够使这些构建方法保持清晰易懂。
+
+此模式扩展到具有多个参数的任何方法，特别是扩展到任何布尔参数，因此方法调用中隔离的`true`或`false`文字始终是自我记录的。此外，为避免通常由API中的双重否定引起的混淆，布尔参数和属性始终以正形式命名（例如，`enabled: true`而不是`disabled: false`）。
+
+### 在陷阱上铺砌
+
+在Flutter框架中的许多地方使用的技术是定义API，使得错误条件不存在。这样可以避免考虑整个错误类。
+
+例如，插值函数允许插值的一端或两端为空，而不是将其定义为错误情况：两个空值之间的插值始终为空，并且从空值或空值插值等效于对给定类型插值为零模拟。这意味着不小心将空传递给插值函数的开发人员不会遇到错误情况，而是会获得合理的结果。
+
+`Flex`布局算法中有一个更微妙的例子。这种布局的概念是赋予flex渲染对象的空间在其子节点之间划分，因此flex的大小应该是整个可用空间。在原始设计中，提供无限空间会失败：这意味着flex应该是无限大小的，无用的布局配置。相反，API已经过调整，以便在为flex渲染对象分配无限空间时，渲染对象会调整其大小以适合所需的子级大小，从而减少可能的错误情况数。
+
+该方法还用于避免允许创建不一致数据的构造函数。例如，`PointerDownEvent`构造函数不允许将`PointerEvent`的`down`属性设置为`false`（这种情况会自相矛盾）；相反，构造函数没有`down`字段的参数，并始终将其设置为`true`。
+
+通常，该方法是为输入域中的所有值定义有效解释。最简单的例子是`Color`构造函数。不是接受四个整数（一个用于红色，一个用于绿色，一个用于蓝色，一个用于alpha，每个都可能超出范围），默认构造函数接受单个整数值，并定义每个位的含义（ 例如，最下面的八位定义红色分量），因此任何输入值都是有效的颜色值。
+
+一个更精细的例子是`paintImage()`函数。此函数接受11个参数，其中一些具有相当宽的输入域，但它们经过精心设计，大部分彼此正交，因此很少有无效组合。
+
+### 积极报告错误案例
+
+并非所有错误条件都可以设计出来。对于那些剩下的，在调试版本中，Flutter通常会尝试很早地捕获错误并立即报告它们。断言被广泛使用。构造函数参数详细检查完整性。监视生命周期，当检测到不一致时，它们会立即引发异常抛出。
+
+在某些情况下，这是极端的：例如，在运行单元测试时，无论测试正在做什么，每个积极布局的`RenderBox`子类都会检查其内部大小调整方法是否满足内部大小调整契约。这有助于捕获可能无法执行的API中的错误。
+
+抛出异常时，它们包含尽可能多的信息。Flutter的一些错误消息会主动探测相关的堆栈跟踪，以确定实际错误的最可能位置。其他则遍历相关的树来确定不良数据的来源。最常见的错误包括详细说明，包括在某些情况下用于避免错误的示例代码或指向其他文档的链接。
+
+### 反应范式
+
+可变的基于树的API受二元访问模式的影响：创建树的原始状态通常使用与后续更新完全不同的操作集。Flutter的渲染层使用这种范式，因为它是维护持久树的有效方法，这是高效布局和绘画的关键。但是，这意味着与渲染层的直接交互充其量是尴尬的，而最坏的情况则容易出错。
+
+Flutter的小部件层引入了一个使用反应范式来操纵底层渲染树的组合机制。此API通过将树创建和树变异步骤组合到单个树描述（构建）步骤中抽象出树操作，其中，在每次更改系统状态之后，开发人员描述用户界面的新配置，并且框架计算反映这种新配置所必需的一系列树突变。
+
+### 插值
+
+由于Flutter的框架鼓励开发人员描述与当前应用程序状态匹配的接口配置，因此存在一种在这些配置之间隐式动画的机制。
+
+例如，假设在状态S<sub>1</sub>中，界面由圆圈组成，但在状态S<sub>2</sub>中，它由正方形组成。如果没有动画机制，状态更改将会有一个不和谐的界面更改。隐式动画允许圆在几帧上平滑正方形化。
+
+可以隐式动画的每个功能都有一个有状态小部件，用于记录输入的当前值，并在输入值更改时开始动画序列，在指定的持续时间内从当前值转换为新值。
 
 This is implemented using `lerp` (linear interpolation) functions using
-immutable objects. Each state (circle and square, in this case)
-is represented as an immutable object that is configured with
-appropriate settings (color, stroke width, etc) and knows how to paint
-itself. When it is time to draw the intermediate steps during the animation,
-the start and end values are passed to the appropriate `lerp` function
-along with a _t_ value representing the point along the animation,
-where 0.0 represents the `start` and 1.0 represents the `end`,
-and the function returns a third immutable object representing the
-intermediate stage.
+这是使用`lerp`（线性插值）函数使用不可变对象实现的。每个状态（在这种情况下为圆形和正方形）表示为不可变对象，配置有适当的设置（颜色，笔触宽度等）并知道如何绘制自身。当在动画期间绘制中间步骤时，将开始和结束值传递给适当的`lerp`函数以及表示动画点的 _t_ 值，其中0.0表示`start`，1.0表示`end`，函数返回表示中间阶段的第三个不可变对象。
 
-For the circle-to-square transition, the `lerp` function would return
-an object representing a "rounded square" with a radius described as
-a fraction derived from the _t_ value, a color interpolated using the
-`lerp` function for colors, and a stroke width interpolated using the
-`lerp` function for doubles. That object, which implements the
-same interface as circles and squares, would then be able to paint
-itself when requested to.
+对于圆到正方形的转换，`lerp`函数将返回一个表示“圆角正方形”的对象，其半径描述为从t值导出的分数，使用颜色的`lerp`函数插值颜色，以及使用双精度的`lerp`函数插值笔划宽度。该对象实现与圆形和正方形相同的界面，然后可以在请求时绘制自己。
 
-This technique allows the state machinery, the mapping of states to
-configurations, the animation machinery, the interpolation machinery,
-and the specific logic relating to how to paint each frame to be
-entirely separated from each other.
+该技术允许状态机制，状态到配置的映射，动画机制，插值机制以及与如何绘制每个帧相关的特定逻辑以完全彼此分离。
 
-This approach is broadly applicable. In Flutter, basic types like
-`Color` and `Shape` can be interpolated, but so can much more elaborate
-types such as `Decoration`, `TextStyle`, or `Theme`. These are
-typically constructed from components that can themselves be interpolated,
-and interpolating the more complicated objects is often as simple as
-recursively interpolating all the values that describe the complicated
-objects.
+这种方法广泛适用。在flutter中，基本类型（如`Color`和`Shape`）可以插值，但更复杂的类型（如`Decoration`、`TextStyle`或`Theme`）也可以插值。这些通常由本身可以插值的组件构成，并且插值更复杂的对象通常就像递归插值描述复杂对象的所有值一样简单。
 
-Some interpolatable objects are defined by class hierarchies. For example,
-shapes are represented by the `ShapeBorder` interface, and there exists a
-variety of shapes, including `BeveledRectangleBorder`, `BoxBorder`,
-`CircleBorder`, `RoundedRectangleBorder`, and `StadiumBorder`. A single
-`lerp` function cannot have a priori knowledge of all the possible types,
-and therefore the interface instead defines `lerpFrom` and `lerpTo` methods,
-which the static `lerp` method defers to. When told to interpolate from
-a shape A to a shape B, first B is asked if it can `lerpFrom` A, then,
-if it cannot, A is instead asked if it can `lerpTo` B. (If neither is
-possible, then the function returns A from values of `t` less than 0.5,
-and returns B otherwise.)
+一些可插值对象由类层次结构定义。例如，形状由`ShapeBorder`接口表示，并且存在各种形状，包括`BeveledRectangleBorder`、`BoxBorder`、`CircleBorder`、`RoundedRectangleBorder`和`StadiumBorder`。单个`lerp`函数不能具有所有可能类型的先验知识，因此接口定义了`lerpFrom`和`lerpTo`方法，静态`lerp`方法遵循这些方法。当被告知从形状A插入到形状B时，首先询问B是否可以`lerpFrom` A，然后，如果不能，则询问A是否可以`lerpTo` B。（如果两者都不可能，则该函数从`t`小于0.5的值返回A ，否则返回B。）
 
-This allows the class hierarchy to be arbitrarily extended, with later
-additions being able to interpolate between previously-known values
-and themselves.
+这允许类层次结构被任意扩展，后来的添加能够在先前已知的值和它们自身之间进行插值。
 
-In some cases, the interpolation itself cannot be described by any of
-the available classes, and a private class is defined to describe the
-intermediate stage. This is the case, for instance, when interpolating
-between a `CircleBorder` and a `RoundedRectangleBorder`.
+在某些情况下，插值本身不能由任何可用类描述，并且定义私有类来描述中间阶段。例如，在`CircleBorder`和`RoundedRectangleBorder`之间进行插值时就是这种情况。
 
-This mechanism has one further added advantage: it can handle interpolation
-from intermediate stages to new values. For example, half-way through
-a circle-to-square transition, the shape could be changed once more,
-causing the animation to need to interpolate to a triangle. So long as
-the triangle class can `lerpFrom` the rounded-square intermediate class,
-the transition can be seamlessly performed.
+这种机制还有一个额外的优点：它可以处理从中间阶段到新值的插值。例如，在圆形到方形转换的中途，形状可能再次改变，导致动画需要插入到三角形。只要三角形类可以`lerpFrom`圆角方形中间类，就可以无缝地执行转换。
 
-## Conclusion
+## 结论
 
-Flutter’s slogan, "everything is a widget," revolves around building
-user interfaces by composing widgets that are, in turn, composed of
-progressively more basic widgets. The result of this aggressive
-composition is a large number of widgets that require carefully
-designed algorithms and data structures to process efficiently.
-With some additional design, these data structures also make it
-easy for developers to create infinite scrolling lists that build
-widgets on demand when they become visible.
+Flutter的口号“一切都是小部件”，围绕着构建用户界面，通过组合小部件来构建，小部件又逐步由更基本的小部件组成。这种积极组合的结果是大量的小部件需要精心设计的算法和数据结构才能有效地处理。通过一些额外的设计，这些数据结构还使开发人员可以轻松创建在可见时按需构建小部件的无限滚动列表。
 
 ---
-**Footnotes:**
+**脚注：**
 
-<sup><a name="a1">1</a></sup> For layout, at least. It may be revisited
-  for painting, for building the accessibility tree if necessary,
-  and for hit testing if necessary.
+<sup><a name="a1">1</a></sup> 至少对于布局来说。可以重新审视绘制，必要时构建可访问性树，以及必要时进行命中测试。
 
-<sup><a name="a2">2</a></sup> Reality, of course, is a bit more
-  complicated. Some layouts involve intrinsic dimensions or baseline
-  measurements, which do involve an additional walk of the relevant subtree
-  (aggressive caching is used to mitigate the potential for quadratic
-  performance in the worst case). These cases, however, are surprisingly
-  rare. In particular, intrinsic dimensions are not required for the
-  common case of shrink-wrapping.
+<sup><a name="a2">2</a></sup> 当然，现实有点复杂。一些布局涉及内在维度或基线测量，其涉及相关子树的额外遍历（积极缓存用于减轻在最坏情况下二次性能的可能性）。然而，这些案例非常罕见。特别是，收缩包装的常见情况不需要内在维度。
 
-<sup><a name="a3">3</a></sup> Technically, the child's position is not
-  part of its RenderBox geometry and therefore need not actually be
-  calculated during layout. Many render objects implicitly position
-  their single child at 0,0 relative to their own origin, which
-  requires no computation or storage at all. Some render objects
-  avoid computing the position of their children until the last
-  possible moment (for example, during the paint phase), to avoid
-  the computation entirely if they are not subsequently painted.
+<sup><a name="a3">3</a></sup> 从技术上讲，子项的位置不是其RenderBox几何图形的一部分，因此在布局过程中无需实际计算。许多渲染对象隐含地将它们的单个子节点相对于它们自己的原点定位在0,0，这根本不需要计算或存储。一些渲染对象避免计算他们的子节点的位置直到最后可能的时刻（例如，在绘制阶段期间），以避免如果他们随后没有被绘制而完全计算。
 
-<sup><a name="a4">4</a></sup>  There exists one exception to this rule.
-  As discussed in the [Building widgets on demand](#building-widgets-on-demand)
-  section, some widgets can be rebuilt as a result of a change in layout
-  constraints. If a widget marked itself dirty for unrelated reasons in
-  the same frame that it also is affected by a change in layout constraints,
-  it will be updated twice. This redundant build is limited to the
-  widget itself and does not impact its descendants.
+<sup><a name="a4">4</a></sup>  这条规则有一个例外。正如[按需构建小部件](#building-widgets-on-demand)部分所述，由于布局约束的更改，某些小部件可能重构。如果小部件在同一帧中因无关原因标记为脏，以及它也受布局约束更改的影响，则它将更新两次。此冗余构建仅限于小部件本身，不会影响其后代。
 
-<sup><a name="a5">5</a></sup> A key is an opaque object optionally
-  associated with a widget whose equality operator is used to influence
-  the reconciliation algorithm.
+<sup><a name="a5">5</a></sup> 键是可选的与小部件相关联的不透明对象，其相等运算符用于影响协调算法。
 
-<sup><a name="a6">6</a></sup>  For accessibility, and to give applications
-  a few extra milliseconds between when a widget is built and when it
-  appears on the screen, the viewport creates (but does not paint)
-  widgets for a few hundred pixels before and after the visible widgets.
+<sup><a name="a6">6</a></sup>  对于可访问性，并且小部件在构建和在屏幕上显示之间为应用程序提供额外的毫秒数时，视口会在可见小部件之前和之后为几百个像素创建（但不绘制）小部件。
 
-<sup><a name="a7">7</a></sup>  This approach was first made popular by
-  Facebook's React library.
+<sup><a name="a7">7</a></sup>  这种方法最初受到Facebook的React库的欢迎。
 
-<sup><a name="a8">8</a></sup>  In practice, the _t_ value is allowed
-  to extend past the 0.0-1.0 range, and does so for some curves. For
-  example, the "elastic" curves overshoot briefly in order to represent
-  a bouncing effect. The interpolation logic typically can extrapolate
-  past the start or end as appropriate. For some types, for example,
-  when interpolating colors, the _t_ value is effectively clamped to
-  the 0.0-1.0 range.
+<sup><a name="a8">8</a></sup>  在实践中，允许 _t_ 值扩展到0.0-1.0范围之外，对于某些曲线也是如此。例如，“弹性”曲线短暂地过冲以表示弹跳效果。插值逻辑通常可以在适当的情况下通过开始或结束进行外推。对于某些类型，例如，在插入颜色时，_t_ 值有效地被钳制到0.0-1.0范围内。
