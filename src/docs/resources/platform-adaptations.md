@@ -1,49 +1,30 @@
 ---
-title: Platform specific behaviors and adaptations
+title: 平台特定的行为和适配
 ---
 
-## Adaptation philosophy
+## 适配哲学
 
-There are generally 2 cases of platform adaptiveness:
+一般有2个平台适配性案例：
 
-1. Things that are behaviors of the OS environment (such as text editing and
-   scrolling) and that would be 'wrong' if a different behavior took place.
-2. Things that are conventionally implemented in apps using the OEM's SDKs
-   (such as using parallel tabs on iOS or showing an
-   [android.app.AlertDialog](https://developer.android.com/reference/android/app/AlertDialog.html)
-   on Android).
+1. 作为OS环境行为的事物（例如文本编辑和滚动），如果发生不同的行为则会“出错”。
+2. 通常使用OEM的SDK在应用程序中实现的事物（例如在iOS上使用并行选项卡或在Android上显示[android.app.AlertDialog](https://developer.android.com/reference/android/app/AlertDialog.html)）。
 
-This article mainly covers the automatic adaptations provided by Flutter
-in case 1 on Android and iOS.
+本文主要介绍Flutter在Android和iOS上的案例1中提供的自动适配。
 
-For case 2, Flutter bundles the means to produce the appropriate effects of
-the platform conventions but does not adapt automatically when app design
-choices are needed. For a discussion, see [#8410](https://github.com/flutter/flutter/issues/8410#issuecomment-468034023).
+对于案例2，Flutter捆绑了产生平台约定的适当效果的方法，但在需要应用程序设计选择时不会自动适配。有关讨论，请参阅[#8410](https://github.com/flutter/flutter/issues/8410#issuecomment-468034023)。
 
-## Page navigation
+## 页面导航
 
-Flutter provides the navigation patterns seen on Android and iOS and also
-automatically adapts the navigation animation to the current platform.
+Flutter提供在Android和iOS上看到的导航模式，并自动将导航动画适配到当前平台。
 
-### Navigation transitions
+### 导航转换
 
-On **Android**, the default
-[Navigator.push]({{site.api}}/flutter/widgets/Navigator/push.html)
-transition is modeled after
-[startActivity()](https://developer.android.com/reference/android/app/Activity.html#startActivity(android.content.Intent)),
-which generally has one bottom-up animation variant.
+在**Android**上，默认的[Navigator.push]({{site.api}}/flutter/widgets/Navigator/push.html)转换是在[startActivity()](https://developer.android.com/reference/android/app/Activity.html#startActivity(android.content.Intent))之后建模的，它通常具有一个自底向上的动画变体。
 
-On **iOS**:
+在**iOS**上：
 
-* The default
-  [Navigator.push]({{site.api}}/flutter/widgets/Navigator/push.html)
-  API produces an iOS Show/Push style transition which animates from
-  end-to-start depending on the locale's RTL setting. The page behind the new
-  route also parallax-slides in the same direction as in iOS.
-* A separate bottom-up transition style exists when pushing a page route where
- [PageRoute.fullscreenDialog]({{site.api}}/flutter/widgets/PageRoute-class.html)
-  is true. This represents iOS's Present/Modal style transition and is
-  typically used on fullscreen modal pages.
+* 默认的[Navigator.push]({{site.api}}/flutter/widgets/Navigator/push.html) API会产生iOS Show/Push样式转换，该转换根据区域设置的RTL设置从端到端动画。 新路由背后的页面也会以与iOS中相同的方向视差滑动。
+* 在推送[PageRoute.fullscreenDialog]({{site.api}}/flutter/widgets/PageRoute-class.html)为true的页面路径时，存在单独的自底向上转换样式。这表示iOS的Present/Modal样式转换，通常用于全屏模式页面。
 
 <div class="container">
   <div class="row">
@@ -51,7 +32,7 @@ On **iOS**:
       <figure class="figure">
         <img style="border-radius: 12px;" src="../../images/platform-adaptations/navigation-android.gif" class="figure-img img-fluid" alt="An animation of the bottom-up page transition on Android" />
         <figcaption class="figure-caption">
-          Android page transition
+          Android页面转换
         </figcaption>
       </figure>
     </div>
@@ -59,7 +40,7 @@ On **iOS**:
       <figure class="figure">
         <img style="border-radius: 22px;" src="../../images/platform-adaptations/navigation-ios.gif" class="figure-img img-fluid" alt="An animation of the end-start style push page transition on iOS" />
         <figcaption class="figure-caption">
-          iOS push transition
+          iOS推送转换
         </figcaption>
       </figure>
     </div>
@@ -67,29 +48,21 @@ On **iOS**:
       <figure class="figure">
         <img style="border-radius: 22px;" src="../../images/platform-adaptations/navigation-ios-modal.gif" class="figure-img img-fluid" alt="An animation of the bottom-up style present page transition on iOS" />
         <figcaption class="figure-caption">
-          iOS present transition
+          iOS当前转换
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-### Platform-specific transition details
+### 特定于平台的转换细节
 
-On **Android**, 2 page transition animation styles exist depending on your OS
-version:
+在**Android**上，根据您的操作系统版本存在2页转换动画样式：
 
-* Pre API 28 uses a bottom-up animation that [slides up and fades
-  in]({{site.api}}/flutter/material/FadeUpwardsPageTransitionsBuilder-class.html).
-* On API 28 and later, the bottom-up animation [slides and clip-reveals
-  up]({{site.api}}/flutter/material/OpenUpwardsPageTransitionsBuilder-class.html).
+* API 28前使用自底向上的动画，[向上滑动并淡入]({{site.api}}/flutter/material/FadeUpwardsPageTransitionsBuilder-class.html)。
+* 在API 28及更高版本中，自底向上的动画[向上滑动和剪辑显示]({{site.api}}/flutter/material/OpenUpwardsPageTransitionsBuilder-class.html)。
 
-On **iOS** when the push style transition is used, Flutter's bundled
-[CupertinoNavigationBar]({{site.api}}/flutter/cupertino/CupertinoNavigationBar-class.html)
-and [CupertinoSliverNavigationBar]({{site.api}}/flutter/cupertino/CupertinoSliverNavigationBar-class.html)
-nav bars automatically animate each subcomponent to its corresponding
-subcomponent on the next or previous page's CupertinoNavigationBar or
-CupertinoSliverNavigationBar.
+在**iOS**上使用推送样式转换时，Flutter捆绑的[CupertinoNavigationBar]({{site.api}}/flutter/cupertino/CupertinoNavigationBar-class.html)和[CupertinoSliverNavigationBar]({{site.api}}/flutter/cupertino/CupertinoSliverNavigationBar-class.html)导航栏会自动将每个子组件设置动画为在下一页或上一页的CupertinoNavigationBar或CupertinoSliverNavigationBar上其对应的子组件。
 
 <div class="container">
   <div class="row">
@@ -113,21 +86,18 @@ CupertinoSliverNavigationBar.
       <figure class="figure text-center">
         <img style="border-radius: 22px;" src="../../images/platform-adaptations/navigation-ios-nav-bar.gif" class="figure-img img-fluid" alt="An animation of the nav bar transitions during a page transition on iOS" />
         <figcaption class="figure-caption">
-          iOS Nav Bar
+          iOS导航栏
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-### Back navigation
+### 后退导航
 
-On **Android**, the OS back button, by default, is sent to Flutter and pops the 
-top route of the
-[WidgetsApp]({{site.api}}/flutter/widgets/WidgetsApp-class.html)'s
-Navigator.
+在**Android**上，默认情况下，OS后退按钮被发送到Flutter并弹出[WidgetsApp]({{site.api}}/flutter/widgets/WidgetsApp-class.html)导航器的顶部路由。
 
-On **iOS**, an edge swipe gesture can be used to pop the top route.
+在**iOS**上，可以使用边缘滑动手势来弹出顶部路由。
 
 <div class="container">
   <div class="row">
@@ -135,7 +105,7 @@ On **iOS**, an edge swipe gesture can be used to pop the top route.
       <figure class="figure">
         <img style="border-radius: 12px;" src="../../images/platform-adaptations/navigation-android-back.gif" class="figure-img img-fluid" alt="A page transition triggered by the Android back button" />
         <figcaption class="figure-caption">
-          Android back button
+          Android后退按钮
         </figcaption>
       </figure>
     </div>
@@ -143,25 +113,20 @@ On **iOS**, an edge swipe gesture can be used to pop the top route.
       <figure class="figure text-center">
         <img style="border-radius: 22px;" src="../../images/platform-adaptations/navigation-ios-back.gif" class="figure-img img-fluid" alt="A page transition triggered by an iOS back swipe gesture" />
         <figcaption class="figure-caption">
-          iOS back swipe gesture
+          iOS后退滑动手势
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-## Scrolling
+## 滚动
 
-Scrolling is an important part of the platform's look and feel, and Flutter
-automatically adjusts the scrolling behavior to match the current platform.
+滚动是平台外观的重要组成部分，Flutter会自动调整滚动行为来匹配当前平台。
 
-### Physics simulation
+### 物理模拟
 
-Android and iOS both have complex scrolling physics simulations that are
-difficult to describe verbally. Generally, iOS's scrollable has more weight and
-dynamic friction but Android has more static friction. Therefore iOS gains high
-speed more gradually but stops less abruptly and is more slippery at
-slow speeds.
+Android和iOS都有复杂的滚动物理模拟，难以口头描述。一般来说，iOS的可滚动性具有更大的重量和动态摩擦，但Android具有更多的静态摩擦。因此，iOS逐渐获得高速，但突然停止较慢，在慢速时更加滑溜。
 
 <div class="container">
   <div class="row">
@@ -169,7 +134,7 @@ slow speeds.
       <figure class="figure">
         <img src="../../images/platform-adaptations/scroll-soft.gif" class="figure-img img-fluid rounded" alt="A soft fling where the iOS scrollable slid longer at lower speed than Android" />
         <figcaption class="figure-caption">
-          Soft fling comparison
+          软抛对比
         </figcaption>
       </figure>
     </div>
@@ -177,7 +142,7 @@ slow speeds.
       <figure class="figure text-center">
         <img src="../../images/platform-adaptations/scroll-medium.gif" class="figure-img img-fluid rounded" alt="A medium force fling where the Android scrollable reached speed faster and stopped more abruptly after reaching a longer distance" />
         <figcaption class="figure-caption">
-          Medium fling comparison
+          中抛对比
         </figcaption>
       </figure>
     </div>
@@ -185,22 +150,18 @@ slow speeds.
       <figure class="figure text-center">
         <img src="../../images/platform-adaptations/scroll-strong.gif" class="figure-img img-fluid rounded" alt="A strong fling where the Android scrollable reach speed faster and reached significantly more distance" />
         <figcaption class="figure-caption">
-          Strong fling comparison
+          强抛对比
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-### Overscroll behavior
+### 过度滚动行为
 
-On **Android**, scrolling past the edge of a scrollable shows an
-[overscroll glow indicator]({{site.api}}/flutter/widgets/GlowingOverscrollIndicator-class.html)
-(based on the color of the current Material theme).
+在**Android**上，滚过可滚动边缘会显示[过度滚动发光指示器]({{site.api}}/flutter/widgets/GlowingOverscrollIndicator-class.html)（基于当前Material主题的颜色）。
 
-On **iOS**, scrolling past the edge of a scrollable
-[overscrolls]({{site.api}}/flutter/widgets/BouncingScrollPhysics-class.html)
-with increasing resistance and snaps back.
+在**iOS**上，滚过可滚动边缘会[过度滚动]({{site.api}}/flutter/widgets/BouncingScrollPhysics-class.html)而阻力增加，然后快速恢复。
 
 <div class="container">
   <div class="row">
@@ -208,7 +169,7 @@ with increasing resistance and snaps back.
       <figure class="figure">
         <img src="../../images/platform-adaptations/scroll-overscroll.gif" class="figure-img img-fluid rounded" alt="Android and iOS scrollables being flung past their edge and exhibiting platform specific overscroll behavior" />
         <figcaption class="figure-caption">
-          Dynamic overscroll comparison
+          动态过度滚动比较
         </figcaption>
       </figure>
     </div>
@@ -216,18 +177,16 @@ with increasing resistance and snaps back.
       <figure class="figure">
         <img src="../../images/platform-adaptations/scroll-static-overscroll.gif" class="figure-img img-fluid rounded" alt="Android and iOS scrollables being overscrolled from a resting position and exhibiting platform specific overscroll behavior" />
         <figcaption class="figure-caption">
-          Static overscroll comparison
+          静态过度滚动比较
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-### Momentum
+### 动量
 
-On **iOS**, repeated flings in the same direction stacks momentum and
-builds more speed with each successive fling. There is no equivalent
-behavior on *Android*.
+在**iOS**上，同一方向上的重复抛掷会叠加动量，并在每次连续抛掷时建立更快的速度。**Android**上没有相同的行为。
 
 <div class="container">
   <div class="row">
@@ -235,17 +194,16 @@ behavior on *Android*.
       <figure class="figure">
         <img src="../../images/platform-adaptations/scroll-momentum-ios.gif" class="figure-img img-fluid rounded" alt="Repeated scroll flings building momentum on iOS" />
         <figcaption class="figure-caption">
-          iOS scroll momentum
+          iOS滚动动量
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-### Return to top
+### 回到顶部
 
-On **iOS**, tapping the OS status bar scrolls the primary scroll controller
-to the top position. There is no equivalent behavior on **Android**.
+在**iOS**上，点击操作系统状态栏会将主滚动控制器滚动到顶部位置。**Android**上没有相同的行为。
 
 <div class="container">
   <div class="row">
@@ -253,27 +211,20 @@ to the top position. There is no equivalent behavior on **Android**.
       <figure class="figure">
         <img style="border-radius: 22px;" src="../../images/platform-adaptations/scroll-tap-to-top-ios.gif" class="figure-img img-fluid" alt="Tapping the status bar scrolls the primary scrollable back to the top" />
         <figcaption class="figure-caption">
-          iOS status bar tap to top
+          iOS状态栏点击回到顶部
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-## Typography
+## 排版
 
-When using the Material package, the typography automatically defaults to the
-font family appropriate for the platform. On Android, the Roboto font is used.
-On iOS, the OS's San Francisco font family is used.
+使用Material包时，排版会自动默认为适合平台的字体系列。在Android上，使用Roboto字体。在iOS上，使用操作系统的旧金山字体系列。
 
-When using the Cupertino package, the [default
-theme](https://github.com/flutter/flutter/blob/master/packages/flutter/lib/src/cupertino/text_theme.dart)
-always uses the San Francisco font.
+使用Cupertino包时，[默认主题](https://github.com/flutter/flutter/blob/master/packages/flutter/lib/src/cupertino/text_theme.dart)始终使用旧金山字体。
 
-The San Francisco font license limits its usage to software running on iOS,
-macOS, or tvOS only. Therefore a fallback font is used when running on Android
-if the platform is debug-overridden to iOS or the default Cupertino theme is
-used.
+旧金山字体许可证将其使用限制为仅在iOS，macOS或tvOS上运行的软件。因此，如果平台被调试覆盖到iOS或使用默认的Cupertino主题，则在Android上运行时会使用后备字体。
 
 <div class="container">
   <div class="row">
@@ -281,7 +232,7 @@ used.
       <figure class="figure">
         <img src="../../images/platform-adaptations/typography-android.png" class="figure-img img-fluid rounded" alt="Roboto font on Android" />
         <figcaption class="figure-caption">
-          Roboto on Android
+          Android上的Roboto
         </figcaption>
       </figure>
     </div>
@@ -289,19 +240,16 @@ used.
       <figure class="figure text-center">
         <img src="../../images/platform-adaptations/typography-ios.png" class="figure-img img-fluid rounded" alt="San Francisco font on iOS" />
         <figcaption class="figure-caption">
-          San Francisco on iOS
+          iOS上的旧金山
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-## Iconography
+## 影像
 
-When using the Material package, certain icons automatically show different
-graphics depending on the platform. For instance, the overflow button's 3 dots
-are vertical on iOS and horizontal on Android. The back button is a simple
-chevron on iOS and has a stem/shaft on Android.
+使用Material包时，某些图标会根据平台自动显示不同的图形。例如，溢出按钮的3个点在iOS上是垂直的，在Android上是水平的。后退按钮在iOS上是简单V形，在Android上有一个杆/轴。
 
 <div class="container">
   <div class="row">
@@ -309,7 +257,7 @@ chevron on iOS and has a stem/shaft on Android.
       <figure class="figure">
         <img src="../../images/platform-adaptations/iconography-android.png" class="figure-img img-fluid rounded" alt="Android appropriate icons" />
         <figcaption class="figure-caption">
-          Icons on Android
+          Android上的图标
         </figcaption>
       </figure>
     </div>
@@ -317,37 +265,30 @@ chevron on iOS and has a stem/shaft on Android.
       <figure class="figure text-center">
         <img src="../../images/platform-adaptations/iconography-ios.png" class="figure-img img-fluid rounded" alt="iOS appropriate icons" />
         <figcaption class="figure-caption">
-          Icons on iOS
+          iOS上的图标
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-## Haptic feedback
+## 触觉反馈
 
-The Material and Cupertino packages automatically trigger the platform
-appropriate haptic feedback in certain scenarios.
+Material和Cupertino包在某些情况下自动触发平台适当的触觉反馈。
 
-For instance, a word selection via text field long-press triggers a 'buzz'
-vibrate on Android and not on iOS.
+例如，通过文本字段长按的单词选择会在Android上触发“嗡嗡”振动，而不会在iOS上触发。
 
-Scrolling through picker items on iOS triggers a 'light impact' knock and
-no feedback on Android.
+在iOS上滚动选取器项目会触发“轻微影响”的敲击声，并且在Android上无反馈。
 
-## Text editing
+## 文本编辑
 
-Flutter also makes the below adaptations while editing the content of text
-fields to match the current platform.
+在编辑文本字段的内容时，Flutter还进行以下适配以匹配当前平台。
 
-### Keyboard gesture navigation
+### 键盘手势导航
 
-On **Android**, horizontal swipes can be made on the soft keyboard's spacebar
-to move the cursor in Material and Cupertino text fields.
+在**Android**上，可以在软键盘空格键上进行水平滑动，以在Material和Cupertino文本字段中移动光标。
 
-On **iOS** devices with 3D Touch capabilities, a force-press-drag gesture,
-could be made on the soft keyboard to move the cursor in 2D via a floating
-cursor. This works on both Material and Cupertino text fields.
+在具有3D Touch功能的**iOS**设备上，可以在软键盘上进行强制按下拖动手势，以通过浮动光标在2D中移动光标。这适用于Material和Cupertino文本字段。
 
 <div class="container">
   <div class="row">
@@ -355,7 +296,7 @@ cursor. This works on both Material and Cupertino text fields.
       <figure class="figure">
         <img src="../../images/platform-adaptations/text-keyboard-move-android.gif" class="figure-img img-fluid rounded" alt="Moving the cursor via the space key on Android" />
         <figcaption class="figure-caption">
-          Android space key cursor move
+          Android空间键光标移动
         </figcaption>
       </figure>
     </div>
@@ -363,20 +304,18 @@ cursor. This works on both Material and Cupertino text fields.
       <figure class="figure text-center">
         <img src="../../images/platform-adaptations/text-keyboard-move-ios.gif" class="figure-img img-fluid rounded" alt="Moving the cursor via 3D Touch drag on the keyboard on iOS" />
         <figcaption class="figure-caption">
-          iOS 3D Touch drag cursor move
+          iOS 3D Touch拖动光标移动
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-### Text selection toolbar
+### 文本选择工具栏
 
-With **Material on Android**, the Android style selection toolbar is shown when
-a text selection is made in a text field.
+使用**Android上的Material**，在文本字段中进行文本选择时，将显示Android样式选择工具栏。
 
-With **Material on iOS** or when using **Cupertino**, the iOS style selection
-toolbar is shown when a text selection is made in a text field.
+使用**iOS上的Material**或使用**Cupertino**，在文本字段中进行文本选择时，会显示iOS样式选择工具栏。
 
 <div class="container">
   <div class="row">
@@ -384,7 +323,7 @@ toolbar is shown when a text selection is made in a text field.
       <figure class="figure">
         <img src="../../images/platform-adaptations/text-toolbar-android.png" class="figure-img img-fluid rounded" alt="Android appropriate text toolbar" />
         <figcaption class="figure-caption">
-          Android text selection toolbar
+          Android文本选择工具栏
         </figcaption>
       </figure>
     </div>
@@ -392,25 +331,22 @@ toolbar is shown when a text selection is made in a text field.
       <figure class="figure text-center">
         <img src="../../images/platform-adaptations/text-toolbar-ios.png" class="figure-img img-fluid rounded" alt="iOS appropriate text toolbar" />
         <figcaption class="figure-caption">
-          iOS text selection toolbar
+          iOS文本选择工具栏
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-### Single tap gesture
+### 单击手势
 
-With **Material on Android**, a single tap in a text field puts the cursor at
-the location of the tap.
+使用**Android上的Material**，在文本字段中单击即可将光标放在点击位置。
 
-A collapsed text selection also shows a draggable handle to subsequently move
-the cursor.
+折叠的文本选择还显示可拖动的句柄，以便随后移动光标。
 
-With **Material on iOS** or when using **Cupertino**, a single tap in a text
-field puts the cursor at the nearest edge of the word tapped.
+使用**iOS上的Material**或使用**Cupertino**，在文本字段中单击即可将光标放在单击单词的最近边缘。
 
-Collapsed text selections don't have draggable handles on iOS.
+折叠的文本选择在iOS上没有可拖动的句柄。
 
 <div class="container">
   <div class="row">
@@ -433,14 +369,11 @@ Collapsed text selections don't have draggable handles on iOS.
   </div>
 </div>
 
-### Long-press gesture
+### 长按手势
 
-With **Material on Android**, a long press selects the word under the long
-press. The selection toolbar is shown upon release.
+使用**Android上的Material**，长按可选择长按下的单词。选择工具栏在释放时显示。
 
-With **Material on iOS** or when using **Cupertino**, a long press places the
-cursor at the location of the long pres. The selection toolbar is shown upon
-release.
+使用**iOS上的Material**或使用**Cupertino**，长按会将光标放在长按的位置。选择工具栏在释放时显示。
 
 <div class="container">
   <div class="row">
@@ -448,7 +381,7 @@ release.
       <figure class="figure">
         <img src="../../images/platform-adaptations/text-long-press-android.gif" class="figure-img img-fluid rounded" alt="Selecting a word via long press on Android" />
         <figcaption class="figure-caption">
-          Android long press
+          Android长按
         </figcaption>
       </figure>
     </div>
@@ -456,20 +389,18 @@ release.
       <figure class="figure text-center">
         <img src="../../images/platform-adaptations/text-long-press-ios.gif" class="figure-img img-fluid rounded" alt="Selecting a position via long press on iOS" />
         <figcaption class="figure-caption">
-          iOS long press
+          iOS长按
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-### Long-press drag gesture
+### 长按拖动手势
 
-With **Material on Android**, dragging while holding the long press expands
-the words selected.
+使用**Android上的Material**，长按同时拖动会扩展单词选择。
 
-With **Material on iOS** or when using **Cupertino**, dragging while holding
-the long press moves the cursor.
+使用**iOS上的Material**或使用**Cupertino**，长按同时拖动会移动光标。
 
 <div class="container">
   <div class="row">
@@ -477,7 +408,7 @@ the long press moves the cursor.
       <figure class="figure">
         <img src="../../images/platform-adaptations/text-long-press-drag-android.gif" class="figure-img img-fluid rounded" alt="Expanding word selection via long press drag on Android" />
         <figcaption class="figure-caption">
-          Android long press drag
+          Android长按拖动
         </figcaption>
       </figure>
     </div>
@@ -485,17 +416,16 @@ the long press moves the cursor.
       <figure class="figure text-center">
         <img src="../../images/platform-adaptations/text-long-press-drag-ios.gif" class="figure-img img-fluid rounded" alt="Moving the cursor via long press drag on iOS" />
         <figcaption class="figure-caption">
-          iOS long press drag
+          iOS长按拖动
         </figcaption>
       </figure>
     </div>
   </div>
 </div>
 
-### Double tap gesture
+### 双击手势
 
-On both Android and iOS, a double tap selects the word receiving the
-double tap and shows the selection toolbar.
+在Android和iOS上，双击选择接收双击的单词并显示选择工具栏。
 
 <div class="container">
   <div class="row">
@@ -503,7 +433,7 @@ double tap and shows the selection toolbar.
       <figure class="figure">
         <img src="../../images/platform-adaptations/text-double-tap-android.gif" class="figure-img img-fluid rounded" alt="Selecting a word via double tap on Android" />
         <figcaption class="figure-caption">
-          Android double tap
+          Android双击
         </figcaption>
       </figure>
     </div>
@@ -511,7 +441,7 @@ double tap and shows the selection toolbar.
       <figure class="figure text-center">
         <img src="../../images/platform-adaptations/text-double-tap-ios.gif" class="figure-img img-fluid rounded" alt="Selecting a word via double tap on iOS" />
         <figcaption class="figure-caption">
-          iOS double tap
+          iOS双击
         </figcaption>
       </figure>
     </div>
